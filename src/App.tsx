@@ -9,6 +9,27 @@ function App() {
   const [diceValues, setDiceValues] = useState<number[]>([0, 0, 0, 0, 0]);
   const [isRolled, setIsRolled] = useState<boolean>(false);
 
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>(
+    window.innerWidth > window.innerHeight ? 'landscape' : 'portrait'
+  );
+
+  // Track screen orientation changes
+  useEffect(() => {
+    const handleResize = () => {
+      setOrientation(window.innerWidth > window.innerHeight ? 'landscape' : 'portrait');
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Clear/reset dice if they are visible and the orientation is landscape
+  useEffect(() => {
+    if (orientation === 'landscape' && screen === 'game' && isRolled) {
+      setIsRolled(false);
+      setDiceValues([0, 0, 0, 0, 0]);
+    }
+  }, [orientation, screen, isRolled]);
+
   // Handle hardware back button on Android (exit app if on start screen, go back to start if on board)
   useEffect(() => {
     const handleBackButton = CapApp.addListener('backButton', () => {
