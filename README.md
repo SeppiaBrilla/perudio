@@ -101,9 +101,14 @@ export ANDROID_HOME=/path/to/android-sdk
 # 2. Configure full JDK path (Required compilation toolchain, e.g. OpenJDK 25 JDK)
 export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64
 
-# 3. Build debug APK
+# 3. Compile Android packages
 cd android
+
+# To compile a debug APK:
 ./gradlew assembleDebug
+# Resulting file: android/app/build/outputs/apk/debug/app-debug.apk
+
+# To compile an unsigned release APK (ready for signing and distribution):
+./gradlew assembleRelease
+# Resulting file: android/app/build/outputs/apk/release/app-release-unsigned.apk
 ```
-The resulting package will be generated at:
-`android/app/build/outputs/apk/debug/app-debug.apk`
