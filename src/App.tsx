@@ -69,10 +69,10 @@ function App() {
 
   const loseDie = () => {
     if (activeDice > 0) {
-      setActiveDice((prev) => prev - 1);
-    } else {
-      if (window.confirm("No dice left! Restart game?")) {
-        resetGame();
+      const nextCount = activeDice - 1;
+      setActiveDice(nextCount);
+      if (nextCount === 0) {
+        setScreen('start');
       }
     }
   };
