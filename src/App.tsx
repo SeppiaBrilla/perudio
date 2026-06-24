@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { App as CapApp } from '@capacitor/app';
 import llamaImg from './assets/llama.png';
+import shakeMp3 from './assets/shake.mp3';
 import './App.css';
 
 function App() {
@@ -8,6 +9,8 @@ function App() {
   const [activeDice, setActiveDice] = useState<number>(5);
   const [diceValues, setDiceValues] = useState<number[]>([0, 0, 0, 0, 0]);
   const [isRolled, setIsRolled] = useState<boolean>(false);
+  const [isRolling, setIsRolling] = useState<boolean>(false);
+  const [rollingValues, setRollingValues] = useState<number[]>([1, 1, 1, 1, 1]);
 
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>(
     window.innerWidth > window.innerHeight ? 'landscape' : 'portrait'
@@ -70,25 +73,50 @@ function App() {
   };
 
   const rollDice = () => {
+    if (isRolling) return;
     if (activeDice === 0) {
       if (window.confirm("No dice left! Restart game?")) {
         resetGame();
       }
       return;
     }
-    const newValues = [...diceValues];
-    for (let i = 0; i < 5; i++) {
-      if (i < activeDice) {
-        newValues[i] = Math.floor(Math.random() * 6) + 1;
-      } else {
-        newValues[i] = 0; // inactive
+
+    setIsRolling(true);
+    
+    // Play shake audio
+    const audio = new Audio(shakeMp3);
+    audio.play().catch((e) => console.log("Audio play failed:", e));
+
+    // Fast cycling interval
+    const intervalId = setInterval(() => {
+      setRollingValues(() => {
+        const next = [];
+        for (let i = 0; i < 5; i++) {
+          next.push(Math.floor(Math.random() * 6) + 1);
+        }
+        return next;
+      });
+    }, 80);
+
+    // Land after 1000ms
+    setTimeout(() => {
+      clearInterval(intervalId);
+      const finalValues = [...diceValues];
+      for (let i = 0; i < 5; i++) {
+        if (i < activeDice) {
+          finalValues[i] = Math.floor(Math.random() * 6) + 1;
+        } else {
+          finalValues[i] = 0;
+        }
       }
-    }
-    setDiceValues(newValues);
-    setIsRolled(true);
+      setDiceValues(finalValues);
+      setIsRolling(false);
+      setIsRolled(true);
+    }, 1000);
   };
 
   const loseDie = () => {
+    if (isRolling) return;
     if (activeDice > 0) {
       const nextCount = activeDice - 1;
       setActiveDice(nextCount);
@@ -116,20 +144,24 @@ function App() {
       );
     }
 
-    // If active but not rolled yet
-    if (!isRolled) {
+    const displayValue = isRolling ? rollingValues[index] : value;
+    const isShowingValue = isRolling || isRolled;
+    const cardClass = `dice-card${isRolling ? ' shaking' : ''}`;
+
+    // If active but not rolled yet (neither rolling nor rolled)
+    if (!isShowingValue) {
       return (
         <div key={index} className="grid-cell">
-          <div className="dice-card"></div>
+          <div className={cardClass}></div>
         </div>
       );
     }
 
-    // If rolled and shows 1 (Llama)
-    if (value === 1) {
+    // If showing 1 (Llama)
+    if (displayValue === 1) {
       return (
         <div key={index} className="grid-cell">
-          <div className="dice-card">
+          <div className={cardClass}>
             <img src={llamaImg} className="llama-img" alt="Llama" />
           </div>
         </div>
@@ -139,8 +171,8 @@ function App() {
     // Standard numbers 2-6
     return (
       <div key={index} className="grid-cell">
-        <div className="dice-card">
-          {dotPositions[value]?.map((pos) => (
+        <div className={cardClass}>
+          {dotPositions[displayValue]?.map((pos) => (
             <div key={pos} className={`dot dot-${pos}`}></div>
           ))}
         </div>
@@ -171,15 +203,15 @@ function App() {
             <div className="dice-grid">
               {Array.from({ length: 5 }).map((_, i) => renderDieCard(diceValues[i], i))}
               <div className="grid-cell">
-                <button className="btn-gradient btn-lose-die" onClick={loseDie}>
+                <button className="btn-gradient btn-lose-die" onClick={loseDie} disabled={isRolling}>
                   Lose a Die
                 </button>
               </div>
             </div>
-            <button className="btn-gradient btn-roll" onClick={rollDice}>
+            <button className="btn-gradient btn-roll" onClick={rollDice} disabled={isRolling}>
               Roll Dice
             </button>
-            <button className="btn-gradient btn-hide" onClick={() => setScreen('hidden')}>
+            <button className="btn-gradient btn-hide" onClick={() => !isRolling && setScreen('hidden')} disabled={isRolling}>
               Hide Dice
             </button>
           </div>

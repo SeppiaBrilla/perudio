@@ -191,3 +191,39 @@
   user-select: none;
   -webkit-user-drag: none;
 }
+
+/* Shake roll animation */
+.dice-card.shaking {
+  animation: shake 0.4s infinite linear;
+}
+
+.dice-card.shaking:nth-child(2n) {
+  animation-duration: 0.35s;
+  animation-delay: 0.05s;
+}
+
+.dice-card.shaking:nth-child(3n) {
+  animation-duration: 0.45s;
+  animation-delay: 0.1s;
+}
+
+@keyframes shake {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  10% { transform: translate(-3px, -2px) rotate(-2deg); }
+  20% { transform: translate(-4px, 1px) rotate(1.5deg); }
+  30% { transform: translate(1px, 3px) rotate(0deg); }
+  40% { transform: translate(3px, -2px) rotate(2deg); }
+  50% { transform: translate(-2px, 3px) rotate(-1.5deg); }
+  60% { transform: translate(-4px, 1px) rotate(0deg); }
+  70% { transform: translate(3px, 2px) rotate(-2deg); }
+  80% { transform: translate(-2px, -3px) rotate(1.5deg); }
+  90% { transform: translate(3px, -1px) rotate(0deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+/* Disabled styling during roll */
+.btn-gradient:disabled {
+  opacity: 0.6;
+  cursor: default;
+  pointer-events: none;
+}
