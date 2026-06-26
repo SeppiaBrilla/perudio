@@ -11,6 +11,8 @@ function App() {
   const [isRolled, setIsRolled] = useState<boolean>(false);
   const [isRolling, setIsRolling] = useState<boolean>(false);
   const [rollingValues, setRollingValues] = useState<number[]>([1, 1, 1, 1, 1]);
+  // Per-die diagonal shake direction: 'a' = upper-left <-> bottom-right, 'b' = upper-right <-> bottom-left
+  const [shakeDirs, setShakeDirs] = useState<('a' | 'b')[]>(['a', 'a', 'a', 'a', 'a']);
 
   const rollAudio = useRef<HTMLAudioElement | null>(null);
 
@@ -90,6 +92,9 @@ function App() {
     }
 
     setIsRolling(true);
+
+    // Pick a random diagonal shake direction per die for this roll
+    setShakeDirs(Array.from({ length: 5 }, () => (Math.random() < 0.5 ? 'a' : 'b')));
     
     // Play preloaded shake audio instantly
     if (rollAudio.current) {
@@ -156,7 +161,7 @@ function App() {
 
     const displayValue = isRolling ? rollingValues[index] : value;
     const isShowingValue = isRolling || isRolled;
-    const cardClass = `dice-card${isRolling ? ' shaking' : ''}`;
+    const cardClass = `dice-card${isRolling ? ` shaking shake-diag-${shakeDirs[index]}` : ''}`;
 
     // If active but not rolled yet (neither rolling nor rolled)
     if (!isShowingValue) {
@@ -190,54 +195,68 @@ function App() {
     );
   };
 
+  // Determine slide direction based on screen ordering so forward navigation
+  // slides in from the right and backward (undo) slides in from the left.
+  const screenOrder: Record<typeof screen, number> = { start: 0, game: 1, hidden: 2 };
+  const prevScreenRef = useRef(screen);
+  const directionRef = useRef<'forward' | 'back'>('forward');
+  if (prevScreenRef.current !== screen) {
+    directionRef.current =
+      screenOrder[screen] > screenOrder[prevScreenRef.current] ? 'forward' : 'back';
+    prevScreenRef.current = screen;
+  }
+  const direction = directionRef.current;
+
   return (
     <div className="app-container">
-      {screen === 'start' && (
-        <>
-          <div className="header-bar">Perudo</div>
-          <div className="screen-content start-screen">
-            <button className="btn-gradient btn-start" onClick={startGame}>
-              Start Game
-            </button>
-            <button className="btn-gradient btn-quit" onClick={handleQuit}>
-              Quit
-            </button>
-          </div>
-        </>
-      )}
-
-      {screen === 'game' && (
-        <>
-          <div className="header-bar">Perudo</div>
-          <div className="screen-content game-board-screen">
-            <div className="dice-grid">
-              {Array.from({ length: 5 }).map((_, i) => renderDieCard(diceValues[i], i))}
-              <div className="grid-cell">
-                <button className="btn-gradient btn-lose-die" onClick={loseDie} disabled={isRolling}>
-                  Lose a Die
-                </button>
-              </div>
+      <div className={`screen-wrapper slide-${direction}`} key={screen}>
+        {screen === 'start' && (
+          <>
+            <div className="header-bar">Perudo</div>
+            <div className="screen-content start-screen">
+              <button className="btn-gradient btn-start" onClick={startGame}>
+                Start Game
+              </button>
+              <button className="btn-gradient btn-quit" onClick={handleQuit}>
+                Quit
+              </button>
             </div>
-            <button className="btn-gradient btn-roll" onClick={rollDice} disabled={isRolling}>
-              Roll Dice
-            </button>
-            <button className="btn-gradient btn-hide" onClick={() => !isRolling && setScreen('hidden')} disabled={isRolling}>
-              Hide Dice
-            </button>
-          </div>
-        </>
-      )}
+          </>
+        )}
 
-      {screen === 'hidden' && (
-        <>
-          <div className="header-bar">Perudo Hidden Dice</div>
-          <div className="screen-content hidden-screen">
-            <button className="btn-gradient btn-show" onClick={() => setScreen('game')}>
-              Show Dice
-            </button>
-          </div>
-        </>
-      )}
+        {screen === 'game' && (
+          <>
+            <div className="header-bar">Perudo</div>
+            <div className="screen-content game-board-screen">
+              <div className="dice-grid">
+                {Array.from({ length: 5 }).map((_, i) => renderDieCard(diceValues[i], i))}
+                <div className="grid-cell">
+                  <button className="btn-gradient btn-lose-die" onClick={loseDie} disabled={isRolling}>
+                    Lose a Die
+                  </button>
+                </div>
+              </div>
+              <button className="btn-gradient btn-roll" onClick={rollDice} disabled={isRolling}>
+                Roll Dice
+              </button>
+              <button className="btn-gradient btn-hide" onClick={() => !isRolling && setScreen('hidden')} disabled={isRolling}>
+                Hide Dice
+              </button>
+            </div>
+          </>
+        )}
+
+        {screen === 'hidden' && (
+          <>
+            <div className="header-bar">Perudo Hidden Dice</div>
+            <div className="screen-content hidden-screen">
+              <button className="btn-gradient btn-show" onClick={() => setScreen('game')}>
+                Show Dice
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
