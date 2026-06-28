@@ -11,22 +11,27 @@ function App() {
   const [isRolled, setIsRolled] = useState<boolean>(false);
   const [isRolling, setIsRolling] = useState<boolean>(false);
   const [rollingValues, setRollingValues] = useState<number[]>([1, 1, 1, 1, 1]);
-  // Per-die diagonal shake direction: 'a' = upper-left <-> bottom-right, 'b' = upper-right <-> bottom-left
-  const [shakeDirs, setShakeDirs] = useState<('a' | 'b')[]>(['a', 'a', 'a', 'a', 'a']);
+  // Added a roll trigger ID to force the CSS shake animation to restart on every click
+  const [rollTrigger, setRollTrigger] = useState<number>(0); 
 
   const rollAudio = useRef<HTMLAudioElement | null>(null);
+  const rollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const rollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Preload shake audio
   useEffect(() => {
     rollAudio.current = new Audio(shakeMp3);
     rollAudio.current.load();
+    
+    return () => {
+      if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
+      if (rollTimeoutRef.current) clearTimeout(rollTimeoutRef.current);
+    };
   }, []);
 
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>(
     window.innerWidth > window.innerHeight ? 'landscape' : 'portrait'
   );
 
-  // Track screen orientation changes
   useEffect(() => {
     const handleResize = () => {
       setOrientation(window.innerWidth > window.innerHeight ? 'landscape' : 'portrait');
@@ -35,15 +40,16 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Clear/reset dice if they are visible and the orientation is landscape
+  // NOTE: Commented out for Desktop testing. Uncomment for mobile!
+  
   useEffect(() => {
     if (orientation === 'landscape' && screen === 'game' && isRolled) {
       setIsRolled(false);
       setDiceValues([0, 0, 0, 0, 0]);
     }
   }, [orientation, screen, isRolled]);
+  
 
-  // Handle hardware back button on Android (exit app if on start screen, go back to start if on board)
   useEffect(() => {
     const handleBackButton = CapApp.addListener('backButton', () => {
       if (screen === 'start') {
@@ -83,7 +89,6 @@ function App() {
   };
 
   const rollDice = () => {
-    if (isRolling) return;
     if (activeDice === 0) {
       if (window.confirm("No dice left! Restart game?")) {
         resetGame();
@@ -91,19 +96,24 @@ function App() {
       return;
     }
 
-    setIsRolling(true);
+    // 1. Instantly clear existing timers so the dice don't stop mid-spam
+    if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
+    if (rollTimeoutRef.current) clearTimeout(rollTimeoutRef.current);
 
-    // Pick a random diagonal shake direction per die for this roll
-    setShakeDirs(Array.from({ length: 5 }, () => (Math.random() < 0.5 ? 'a' : 'b')));
+    setIsRolling(true);
+    setIsRolled(false);
     
-    // Play preloaded shake audio instantly
+    // 2. Update trigger to force CSS re-render and restart the shake animation
+    setRollTrigger(prev => prev + 1);
+    
+    // 3. Instantly restart audio from the beginning on every click
     if (rollAudio.current) {
       rollAudio.current.currentTime = 0;
       rollAudio.current.play().catch((e) => console.log("Audio play failed:", e));
     }
 
-    // Cycle through random faces (keeps same face for 160ms - double the previous 80ms)
-    const intervalId = setInterval(() => {
+    // 4. Start rapid cycling of faces (80ms for chaotic rolling effect)
+    rollIntervalRef.current = setInterval(() => {
       setRollingValues(() => {
         const next = [];
         for (let i = 0; i < 5; i++) {
@@ -111,27 +121,26 @@ function App() {
         }
         return next;
       });
-    }, 160);
+    }, 80);
 
-    // Land after 1000ms
-    setTimeout(() => {
-      clearInterval(intervalId);
-      const finalValues = [...diceValues];
-      for (let i = 0; i < 5; i++) {
-        if (i < activeDice) {
+    // 5. Set the final settle timer. This will ALWAYS be 1000ms from your LAST click.
+    rollTimeoutRef.current = setTimeout(() => {
+      if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
+      
+      setDiceValues(() => {
+        const finalValues = [0, 0, 0, 0, 0];
+        for (let i = 0; i < 5; i++) {
           finalValues[i] = Math.floor(Math.random() * 6) + 1;
-        } else {
-          finalValues[i] = 0;
         }
-      }
-      setDiceValues(finalValues);
+        return finalValues;
+      });
+
       setIsRolling(false);
       setIsRolled(true);
-    }, 1000);
+    }, 1000); 
   };
 
   const loseDie = () => {
-    if (isRolling) return;
     if (activeDice > 0) {
       const nextCount = activeDice - 1;
       setActiveDice(nextCount);
@@ -150,7 +159,6 @@ function App() {
   };
 
   const renderDieCard = (value: number, index: number) => {
-    // If this die has been lost
     if (index >= activeDice) {
       return (
         <div key={index} className="grid-cell">
@@ -161,9 +169,13 @@ function App() {
 
     const displayValue = isRolling ? rollingValues[index] : value;
     const isShowingValue = isRolling || isRolled;
-    const cardClass = `dice-card${isRolling ? ` shaking shake-diag-${shakeDirs[index]}` : ''}`;
+    
+    // Alternating diagonal shake: die 1 -> upper-left to bottom-right (a),
+    // die 2 -> upper-right to bottom-left (b), repeating for the rest.
+    const shakeDir = index % 2 === 0 ? 'a' : 'b';
+    // Added rollTrigger to the key to force CSS animation to restart
+    const cardClass = `dice-card${isRolling ? ` shaking shake-diag-${shakeDir} roll-anim-${rollTrigger}` : ''}`;
 
-    // If active but not rolled yet (neither rolling nor rolled)
     if (!isShowingValue) {
       return (
         <div key={index} className="grid-cell">
@@ -172,7 +184,6 @@ function App() {
       );
     }
 
-    // If showing 1 (Llama)
     if (displayValue === 1) {
       return (
         <div key={index} className="grid-cell">
@@ -183,7 +194,6 @@ function App() {
       );
     }
 
-    // Standard numbers 2-6
     return (
       <div key={index} className="grid-cell">
         <div className={cardClass}>
@@ -195,11 +205,10 @@ function App() {
     );
   };
 
-  // Determine slide direction based on screen ordering so forward navigation
-  // slides in from the right and backward (undo) slides in from the left.
   const screenOrder: Record<typeof screen, number> = { start: 0, game: 1, hidden: 2 };
   const prevScreenRef = useRef(screen);
   const directionRef = useRef<'forward' | 'back'>('forward');
+  
   if (prevScreenRef.current !== screen) {
     directionRef.current =
       screenOrder[screen] > screenOrder[prevScreenRef.current] ? 'forward' : 'back';
@@ -231,15 +240,15 @@ function App() {
               <div className="dice-grid">
                 {Array.from({ length: 5 }).map((_, i) => renderDieCard(diceValues[i], i))}
                 <div className="grid-cell">
-                  <button className="btn-gradient btn-lose-die" onClick={loseDie} disabled={isRolling}>
+                  <button className="btn-gradient btn-lose-die" onClick={loseDie}>
                     Lose a Die
                   </button>
                 </div>
               </div>
-              <button className="btn-gradient btn-roll" onClick={rollDice} disabled={isRolling}>
+              <button className="btn-gradient btn-roll" onClick={rollDice}>
                 Roll Dice
               </button>
-              <button className="btn-gradient btn-hide" onClick={() => !isRolling && setScreen('hidden')} disabled={isRolling}>
+              <button className="btn-gradient btn-hide" onClick={() => setScreen('hidden')}>
                 Hide Dice
               </button>
             </div>
